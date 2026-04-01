@@ -203,4 +203,7 @@ export interface AnthropicStreamState {
       anthropicBlockIndex: number
     }
   }
+  // Response metadata from Copilot /responses
+  responseId?: string
+  responseModel?: string
 }
