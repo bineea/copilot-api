@@ -6,8 +6,9 @@ import consola from "consola"
 import { serve, type ServerHandler } from "srvx"
 import invariant from "tiny-invariant"
 
+import { applyVerboseLogging } from "./lib/logging"
 import { ensurePaths } from "./lib/paths"
-import { initProxyFromEnv } from "./lib/proxy"
+import { initProxy, initProxyFromEnv } from "./lib/proxy"
 import { generateEnvScript } from "./lib/shell"
 import { state } from "./lib/state"
 import { setupCopilotToken, setupGitHubToken } from "./lib/token"
@@ -25,17 +26,20 @@ interface RunServerOptions {
   claudeCode: boolean
   showToken: boolean
   proxyEnv: boolean
+  proxy?: string
+  noProxy: boolean
 }
 
 export async function runServer(options: RunServerOptions): Promise<void> {
-  if (options.proxyEnv) {
+  if (options.noProxy) {
+    initProxy({ mode: "disabled" })
+  } else if (options.proxy) {
+    initProxy({ mode: "fixed", proxyUrl: options.proxy })
+  } else if (options.proxyEnv) {
     initProxyFromEnv()
   }
 
-  if (options.verbose) {
-    consola.level = 5
-    consola.info("Verbose logging enabled")
-  }
+  applyVerboseLogging(options.verbose)
 
   state.accountType = options.accountType
   if (options.accountType !== "individual") {
@@ -179,6 +183,16 @@ export const start = defineCommand({
       default: false,
       description: "Show GitHub and Copilot tokens on fetch and refresh",
     },
+    proxy: {
+      type: "string",
+      description:
+        "Fixed HTTP(S) proxy URL (e.g. http://copilot-proxy.lenovo.com:8000)",
+    },
+    "no-proxy": {
+      type: "boolean",
+      default: false,
+      description: "Disable proxy initialization",
+    },
     "proxy-env": {
       type: "boolean",
       default: false,
@@ -202,6 +216,8 @@ export const start = defineCommand({
       claudeCode: args["claude-code"],
       showToken: args["show-token"],
       proxyEnv: args["proxy-env"],
+      proxy: args.proxy,
+      noProxy: args["no-proxy"],
     })
   },
 })

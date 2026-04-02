@@ -8,6 +8,7 @@ export class HTTPError extends Error {
 
   constructor(message: string, response: Response) {
     super(message)
+    this.name = "HTTPError"
     this.response = response
   }
 }

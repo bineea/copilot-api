@@ -42,13 +42,19 @@ describe("/v1/responses route", () => {
     const res = await server.request("/v1/responses", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model: "gpt-5.4", input: "hi" }),
+      body: JSON.stringify({ model: "gpt-5.4", input: "hi", max_tokens: 123 }),
     })
 
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json).toMatchObject({ id: "resp_1" })
     expect(fetchMock).toHaveBeenCalled()
+
+    // 转发到 Copilot /responses 时不应包含 max_tokens（上游不支持）
+    const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(typeof init.body).toBe("string")
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body).not.toHaveProperty("max_tokens")
   })
 
   it("streams SSE when stream=true and sets strict SSE headers", async () => {

@@ -14,7 +14,6 @@ export interface ResponsesPayload {
   temperature?: number | null
   top_p?: number | null
   max_output_tokens?: number | null
-  max_tokens?: number | null
   tools?: unknown
   tool_choice?: unknown
   user?: string | null
@@ -36,7 +35,10 @@ export const createResponses = async (payload: ResponsesPayload) => {
   })
 
   if (!response.ok) {
-    consola.error("Failed to create responses", response)
+    consola.error("Failed to create responses", {
+      status: response.status,
+      statusText: response.statusText,
+    })
     throw new HTTPError("Failed to create responses", response)
   }
 

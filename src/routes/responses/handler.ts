@@ -15,7 +15,14 @@ import {
 export async function handleCompletion(c: Context) {
   await checkRateLimit(state)
 
-  const payload = await c.req.json<ResponsesPayload>()
+  const payloadRaw = await c.req.json<Record<string, unknown>>()
+
+  // /responses 上游不支持 max_tokens（使用 max_output_tokens）
+  if (Object.hasOwn(payloadRaw, "max_tokens")) {
+    delete payloadRaw.max_tokens
+  }
+
+  const payload = payloadRaw as ResponsesPayload
 
   // 避免泄露敏感内容，只输出摘要
   try {
@@ -47,17 +54,34 @@ export async function handleCompletion(c: Context) {
   c.header("X-Accel-Buffering", "no")
 
   return streamSSE(c, async (stream) => {
-    for await (const event of response) {
-      if (!event.data) {
-        continue
-      }
+    try {
+      for await (const event of response) {
+        if (!event.data) {
+          continue
+        }
 
-      if (event.data === "[DONE]") {
-        break
-      }
+        if (event.data === "[DONE]") {
+          break
+        }
 
-      // 完全透传：不重建 message，避免丢失 id/retry 等字段。
-      await stream.writeSSE(event as SSEMessage)
+        // 完全透传：不重建 message，避免丢失 id/retry 等字段。
+        await stream.writeSSE(event as SSEMessage)
+      }
+    } catch {
+      // 最佳努力：告知客户端并结束
+      try {
+        await stream.writeSSE({
+          event: "error",
+          data: JSON.stringify({
+            error: {
+              message: "Upstream SSE aborted.",
+              type: "error",
+            },
+          }),
+        })
+      } catch {
+        // ignore
+      }
     }
   })
 }

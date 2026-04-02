@@ -10,10 +10,14 @@
   `bun run lint` (uses @echristian/eslint-config)
 - **Lint & Fix staged files:**  
   `bunx lint-staged`
-- **Test all:**  
-   `bun test`
-- **Test single file:**  
-   `bun test tests/claude-request.test.ts`
+- **Test (bun-tests):**  
+  `bun test`
+- **Test (vitest-tests):**  
+  `bun run test`
+- **Test single file (bun):**  
+  `bun test bun-tests/create-chat-completions.test.ts`
+- **Test single file (vitest):**  
+  `bun run test vitest-tests/responses-route.vitest.ts`
 - **Start (prod):**  
   `bun run start`
 
@@ -36,7 +40,8 @@
 - **Modules:**  
   Use ESNext modules, no CommonJS.
 - **Testing:**  
-   Use Bun's built-in test runner. Place tests in `tests/`, name as `*.test.ts`.
+  - Bun tests live in `bun-tests/`, name as `*.test.ts` (run: `bun test`).
+  - Vitest tests live in `vitest-tests/`, name as `*.vitest.ts` (run: `bun run test`).
 - **Linting:**  
   Uses `@echristian/eslint-config` (see npm for details). Includes stylistic, unused imports, regex, and package.json rules.
 - **Paths:**  
