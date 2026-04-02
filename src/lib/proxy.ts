@@ -2,12 +2,55 @@ import consola from "consola"
 import { getProxyForUrl } from "proxy-from-env"
 import { Agent, ProxyAgent, setGlobalDispatcher, type Dispatcher } from "undici"
 
+import { formatUrlForLog } from "./url"
+
+export type ProxyInitOptions =
+  | { mode: "env" }
+  | { mode: "fixed"; proxyUrl: string }
+  | { mode: "disabled" }
+
 export function initProxyFromEnv(): void {
-  if (typeof Bun !== "undefined") return
+  initProxy({ mode: "env" })
+}
+
+export function initProxy(opts: ProxyInitOptions): void {
+  if (opts.mode === "disabled") {
+    if (typeof Bun !== "undefined") {
+      delete process.env.HTTP_PROXY
+      delete process.env.HTTPS_PROXY
+      consola.debug("Bun proxy disabled (cleared HTTP_PROXY/HTTPS_PROXY)")
+      return
+    }
+
+    // Node/undici: force direct by overriding any default proxy behavior.
+    setGlobalDispatcher(new Agent())
+    consola.debug("HTTP proxy disabled (forced direct dispatcher)")
+    return
+  }
+
+  if (typeof Bun !== "undefined") {
+    // Bun 下无法通过 undici 的 setGlobalDispatcher 影响全局 fetch。
+    // 采取等效策略：通过环境变量让 Bun 的网络栈走代理。
+    if (opts.mode === "fixed") {
+      // 同时设置 HTTP_PROXY 和 HTTPS_PROXY（你的偏好）
+      process.env.HTTP_PROXY = opts.proxyUrl
+      process.env.HTTPS_PROXY = opts.proxyUrl
+      consola.debug(
+        `Bun proxy configured via env: ${formatUrlForLog(opts.proxyUrl)}`,
+      )
+    } else {
+      const current = process.env.HTTPS_PROXY
+      consola.debug(
+        `Bun proxy mode=${opts.mode} (env-driven). Current HTTPS_PROXY=${current ? formatUrlForLog(current) : ""}`,
+      )
+    }
+    return
+  }
 
   try {
     const direct = new Agent()
     const proxies = new Map<string, ProxyAgent>()
+    const fixedProxyUrl = opts.mode === "fixed" ? opts.proxyUrl : undefined
 
     // We only need a minimal dispatcher that implements `dispatch` at runtime.
     // Typing the object as `Dispatcher` forces TypeScript to require many
@@ -23,11 +66,15 @@ export function initProxyFromEnv(): void {
             typeof options.origin === "string" ?
               new URL(options.origin)
             : (options.origin as URL)
-          const get = getProxyForUrl as unknown as (
-            u: string,
-          ) => string | undefined
-          const raw = get(origin.toString())
-          const proxyUrl = raw && raw.length > 0 ? raw : undefined
+          const proxyUrl =
+            fixedProxyUrl
+            ?? (() => {
+              const get = getProxyForUrl as unknown as (
+                u: string,
+              ) => string | undefined
+              const raw = get(origin.toString())
+              return raw && raw.length > 0 ? raw : undefined
+            })()
           if (!proxyUrl) {
             consola.debug(`HTTP proxy bypass: ${origin.hostname}`)
             return (direct as unknown as Dispatcher).dispatch(options, handler)
@@ -37,14 +84,9 @@ export function initProxyFromEnv(): void {
             agent = new ProxyAgent(proxyUrl)
             proxies.set(proxyUrl, agent)
           }
-          let label = proxyUrl
-          try {
-            const u = new URL(proxyUrl)
-            label = `${u.protocol}//${u.host}`
-          } catch {
-            /* noop */
-          }
-          consola.debug(`HTTP proxy route: ${origin.hostname} via ${label}`)
+          consola.debug(
+            `HTTP proxy route: ${origin.hostname} via ${formatUrlForLog(proxyUrl)}`,
+          )
           return (agent as unknown as Dispatcher).dispatch(options, handler)
         } catch {
           return (direct as unknown as Dispatcher).dispatch(options, handler)
@@ -59,7 +101,11 @@ export function initProxyFromEnv(): void {
     }
 
     setGlobalDispatcher(dispatcher as unknown as Dispatcher)
-    consola.debug("HTTP proxy configured from environment (per-URL)")
+    consola.debug(
+      fixedProxyUrl ?
+        `HTTP proxy configured: fixed (${formatUrlForLog(fixedProxyUrl)})`
+      : "HTTP proxy configured from environment (per-URL)",
+    )
   } catch (err) {
     consola.debug("Proxy setup skipped:", err)
   }

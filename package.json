@@ -32,6 +32,7 @@
     "release": "bumpp && bun publish --access public",
     "start": "NODE_ENV=production bun run ./src/main.ts",
     "test": "vitest run",
+    "test:bun": "bun test bun-tests",
     "typecheck": "tsc"
   },
   "simple-git-hooks": {
