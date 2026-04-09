@@ -196,6 +196,8 @@ export interface AnthropicStreamState {
   messageStartSent: boolean
   contentBlockIndex: number
   contentBlockOpen: boolean
+  currentContentBlockType?: "text" | "tool_use"
+  lastContentBlockType?: "text" | "tool_use"
   toolCalls: {
     [openAIToolIndex: number]: {
       id: string
@@ -203,6 +205,16 @@ export interface AnthropicStreamState {
       anthropicBlockIndex: number
     }
   }
+  responseToolCalls?: Partial<
+    Record<
+      string,
+      {
+        id: string
+        name: string
+        anthropicBlockIndex?: number
+      }
+    >
+  >
   // Response metadata from Copilot /responses
   responseId?: string
   responseModel?: string

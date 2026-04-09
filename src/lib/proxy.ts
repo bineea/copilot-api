@@ -2,6 +2,8 @@ import consola from "consola"
 import { getProxyForUrl } from "proxy-from-env"
 import { Agent, ProxyAgent, setGlobalDispatcher, type Dispatcher } from "undici"
 
+import { resolveProxyRouteForUrl } from "./proxy-options"
+import { recordProxyRoute } from "./request-context"
 import { formatUrlForLog } from "./url"
 
 export type ProxyInitOptions =
@@ -9,11 +11,18 @@ export type ProxyInitOptions =
   | { mode: "fixed"; proxyUrl: string }
   | { mode: "disabled" }
 
+const proxyLoggedFetch = Symbol.for("copilot-api.proxyLoggedFetch")
+const proxyLoggingOptions = Symbol.for("copilot-api.proxyLoggingOptions")
+
+type FetchRequestInput = string | URL | Request
+
 export function initProxyFromEnv(): void {
   initProxy({ mode: "env" })
 }
 
 export function initProxy(opts: ProxyInitOptions): void {
+  installProxyLoggingFetch(opts)
+
   if (opts.mode === "disabled") {
     if (typeof Bun !== "undefined") {
       delete process.env.HTTP_PROXY
@@ -109,4 +118,52 @@ export function initProxy(opts: ProxyInitOptions): void {
   } catch (err) {
     consola.debug("Proxy setup skipped:", err)
   }
+}
+
+function installProxyLoggingFetch(opts: ProxyInitOptions) {
+  const globalWithFetch = globalThis as typeof globalThis & {
+    [proxyLoggedFetch]?: boolean
+    [proxyLoggingOptions]?: ProxyInitOptions
+  }
+
+  globalWithFetch[proxyLoggingOptions] = opts
+
+  if (globalWithFetch[proxyLoggedFetch]) {
+    return
+  }
+
+  const originalFetch = globalThis.fetch.bind(globalThis)
+
+  globalThis.fetch = (async (input: FetchRequestInput, init?: RequestInit) => {
+    const requestUrl = getRequestUrl(input)
+
+    if (requestUrl) {
+      const activeOptions = globalWithFetch[proxyLoggingOptions] ?? opts
+      const routeInfo = resolveProxyRouteForUrl(requestUrl, activeOptions)
+      recordProxyRoute(routeInfo.hostname, routeInfo.route)
+      consola.debug(
+        `Outbound proxy route: ${routeInfo.hostname} -> ${routeInfo.route}`,
+      )
+    }
+
+    return originalFetch(input, init)
+  }) as typeof fetch
+
+  globalWithFetch[proxyLoggedFetch] = true
+}
+
+function getRequestUrl(input: FetchRequestInput): string | undefined {
+  if (input instanceof URL) {
+    return input.toString()
+  }
+
+  if (typeof input === "string") {
+    return input
+  }
+
+  if (typeof Request !== "undefined" && input instanceof Request) {
+    return input.url
+  }
+
+  return undefined
 }

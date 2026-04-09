@@ -9,6 +9,10 @@ import invariant from "tiny-invariant"
 import { applyVerboseLogging } from "./lib/logging"
 import { ensurePaths } from "./lib/paths"
 import { initProxy, initProxyFromEnv } from "./lib/proxy"
+import {
+  formatProxyStartupStatus,
+  resolveProxyInitOptions,
+} from "./lib/proxy-options"
 import { generateEnvScript } from "./lib/shell"
 import { state } from "./lib/state"
 import { setupCopilotToken, setupGitHubToken } from "./lib/token"
@@ -31,15 +35,16 @@ interface RunServerOptions {
 }
 
 export async function runServer(options: RunServerOptions): Promise<void> {
-  if (options.noProxy) {
-    initProxy({ mode: "disabled" })
-  } else if (options.proxy) {
-    initProxy({ mode: "fixed", proxyUrl: options.proxy })
-  } else if (options.proxyEnv) {
-    initProxyFromEnv()
-  }
-
   applyVerboseLogging(options.verbose)
+
+  const proxyOptions = resolveProxyInitOptions(options)
+  consola.info(formatProxyStartupStatus(proxyOptions))
+
+  if (proxyOptions.mode === "env") {
+    initProxyFromEnv()
+  } else {
+    initProxy(proxyOptions)
+  }
 
   state.accountType = options.accountType
   if (options.accountType !== "individual") {
@@ -121,6 +126,9 @@ export async function runServer(options: RunServerOptions): Promise<void> {
   serve({
     fetch: server.fetch as ServerHandler,
     port: options.port,
+    bun: {
+      idleTimeout: 120,
+    },
   })
 }
 
@@ -186,17 +194,18 @@ export const start = defineCommand({
     proxy: {
       type: "string",
       description:
-        "Fixed HTTP(S) proxy URL (e.g. http://copilot-proxy.lenovo.com:8000)",
+        "Fixed HTTP(S) proxy URL that overrides the default proxy setting",
     },
     "no-proxy": {
       type: "boolean",
       default: false,
-      description: "Disable proxy initialization",
+      description: "Disable proxy initialization, including the default proxy",
     },
     "proxy-env": {
       type: "boolean",
       default: false,
-      description: "Initialize proxy from environment variables",
+      description:
+        "Initialize proxy from environment variables instead of the default proxy",
     },
   },
   run({ args }) {

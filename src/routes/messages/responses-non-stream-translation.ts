@@ -2,6 +2,7 @@ import {
   type AnthropicResponse,
   type AnthropicTextBlock,
 } from "./anthropic-types"
+import { mapResponsesStopReasonToAnthropic } from "./utils"
 
 function getString(obj: unknown, key: string): string | undefined {
   if (!obj || typeof obj !== "object") return undefined
@@ -90,7 +91,7 @@ export function translateResponsesToAnthropic(
     ?? getString(response.response ?? null, "stop_reason")
     ?? getString(response.response ?? null, "finish_reason")
 
-  const stop_reason = stopReasonRaw === "length" ? "max_tokens" : "end_turn"
+  const stop_reason = mapResponsesStopReasonToAnthropic(stopReasonRaw)
 
   return {
     id,

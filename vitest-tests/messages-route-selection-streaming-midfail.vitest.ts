@@ -63,7 +63,7 @@ describe("/v1/messages route selection (streaming mid-stream failure)", () => {
 
       return Promise.reject(new Error("unexpected url"))
     })
-    vi.stubGlobal("fetch", fetchMock as typeof fetch)
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch)
 
     const server = await importServer()
 

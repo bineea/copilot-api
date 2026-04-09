@@ -48,7 +48,10 @@ describe("/v1/messages routes to /responses", () => {
     expect(res.status).toBe(200)
     expect(fetchMock).toHaveBeenCalled()
 
-    const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const firstCall = fetchMock.mock.calls[0]
+    expect(firstCall).toBeDefined()
+
+    const [_url, init] = firstCall as unknown as [string, RequestInit]
     expect(typeof init.body).toBe("string")
     const body = JSON.parse(init.body as string) as Record<string, unknown>
 

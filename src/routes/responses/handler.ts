@@ -22,7 +22,20 @@ export async function handleCompletion(c: Context) {
     delete payloadRaw.max_tokens
   }
 
-  const payload = payloadRaw as ResponsesPayload
+  if (!isResponsesPayload(payloadRaw)) {
+    return c.json(
+      {
+        error: {
+          message:
+            "Invalid /v1/responses payload: missing string field 'model'",
+          type: "invalid_request_error",
+        },
+      },
+      400,
+    )
+  }
+
+  const payload: ResponsesPayload = payloadRaw
 
   // 避免泄露敏感内容，只输出摘要
   try {
@@ -89,3 +102,11 @@ export async function handleCompletion(c: Context) {
 const isNonStreaming = (
   response: Awaited<ReturnType<typeof createResponses>>,
 ): response is ResponsesNonStreamingResponse => Object.hasOwn(response, "id")
+
+function isResponsesPayload(value: unknown): value is ResponsesPayload {
+  return (
+    typeof value === "object"
+    && value !== null
+    && typeof (value as { model?: unknown }).model === "string"
+  )
+}

@@ -51,7 +51,10 @@ describe("/v1/responses route", () => {
     expect(fetchMock).toHaveBeenCalled()
 
     // 转发到 Copilot /responses 时不应包含 max_tokens（上游不支持）
-    const [_url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const firstCall = fetchMock.mock.calls[0]
+    expect(firstCall).toBeDefined()
+
+    const [_url, init] = firstCall as unknown as [string, RequestInit]
     expect(typeof init.body).toBe("string")
     const body = JSON.parse(init.body as string) as Record<string, unknown>
     expect(body).not.toHaveProperty("max_tokens")
